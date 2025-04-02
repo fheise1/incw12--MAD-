@@ -17,7 +17,6 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      // Remove the debug banner
       debugShowCheckedModeBanner: false,
       title: 'Test',
       home: HomePage(),
@@ -33,45 +32,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // text fields' controllers
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController(); // Controller for search bar
-  final TextEditingController _minPriceController = TextEditingController(); // Controller for minimum price
-  final TextEditingController _maxPriceController = TextEditingController(); // Controller for maximum price
 
   final CollectionReference _products =
       FirebaseFirestore.instance.collection('products');
-
-  String _searchQuery = '';
-  double? _minPrice; // Minimum price filter
-  double? _maxPrice; // Maximum price filter
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
-      });
-    });
-  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
-    _searchController.dispose();
-    _minPriceController.dispose();
-    _maxPriceController.dispose();
     super.dispose();
-  }
-
-  void _applyPriceFilter() {
-    setState(() {
-      _minPrice = double.tryParse(_minPriceController.text);
-      _maxPrice = double.tryParse(_maxPriceController.text);
-    });
   }
 
   Future<void> _createOrUpdate([DocumentSnapshot? documentSnapshot]) async {
@@ -118,12 +89,10 @@ class _HomePageState extends State<HomePage> {
                   double price = double.parse(_priceController.text);
                   if (name.isNotEmpty && price != null) {
                     if (action == 'create') {
-                      // Persist a new product to Firestore
                       await _products.add({"name": name, "price": price});
                     }
 
                     if (action == 'update') {
-                      // Update the product
                       await _products.doc(documentSnapshot!.id).update({
                         "name": name,
                         "price": price,
@@ -158,111 +127,49 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('CRUD operations'),
+        title: const Text('Inventory Management using CRUD'),
       ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          // Price Range Filter
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _minPriceController,
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Min Price',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _maxPriceController,
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Max Price',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _applyPriceFilter,
-                  child: const Text('Filter'),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            // Using StreamBuilder to display all products from Firestore in real-time
-            child: StreamBuilder(
-              stream: _products.snapshots(),
-              builder: (context, AsyncSnapshot<QuerySnapshot> streamSnapshot) {
-                if (streamSnapshot.hasData) {
-                  final filteredDocs = streamSnapshot.data!.docs.where((doc) {
-                    final name = doc['name'].toString().toLowerCase();
-                    final price = doc['price'] as double;
-                    final matchesSearch = name.contains(_searchQuery);
-                    final matchesPrice = (_minPrice == null || price >= _minPrice!) &&
-                        (_maxPrice == null || price <= _maxPrice!);
-                    return matchesSearch && matchesPrice;
-                  }).toList();
-
-                  return ListView.builder(
-                    itemCount: filteredDocs.length,
-                    itemBuilder: (context, index) {
-                      final DocumentSnapshot documentSnapshot =
-                          filteredDocs[index];
-                      return Card(
-                        margin: const EdgeInsets.all(10),
-                        child: ListTile(
-                          title: Text(documentSnapshot['name']),
-                          subtitle: Text(documentSnapshot['price'].toString()),
-                          trailing: SizedBox(
-                            width: 100,
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () =>
-                                      _createOrUpdate(documentSnapshot),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete),
-                                  onPressed: () =>
-                                      _deleteProduct(documentSnapshot.id),
-                                ),
-                              ],
-                            ),
+      body: StreamBuilder(
+        stream: _products.snapshots(),
+        builder: (context, AsyncSnapshot<QuerySnapshot> streamSnapshot) {
+          if (streamSnapshot.hasData) {
+            return ListView.builder(
+              itemCount: streamSnapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                final DocumentSnapshot documentSnapshot =
+                    streamSnapshot.data!.docs[index];
+                return Card(
+                  margin: const EdgeInsets.all(10),
+                  child: ListTile(
+                    title: Text(documentSnapshot['name']),
+                    subtitle: Text(documentSnapshot['price'].toString()),
+                    trailing: SizedBox(
+                      width: 100,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () =>
+                                _createOrUpdate(documentSnapshot),
                           ),
-                        ),
-                      );
-                    },
-                  );
-                }
-
-                return const Center(
-                  child: CircularProgressIndicator(),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () =>
+                                _deleteProduct(documentSnapshot.id),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 );
               },
-            ),
-          ),
-        ],
+            );
+          }
+
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _createOrUpdate(),
